@@ -63,7 +63,7 @@ app.get('/movies', requireAuth, async (req, res) => {
 
     res.json({ total, page, limit, items })
   } catch (e) {
-    res.status(500).json({ error: 'Error al listar movies' })
+    res.status(500).json({ error: 'Error al listar moviess' })
   }
 })
 
