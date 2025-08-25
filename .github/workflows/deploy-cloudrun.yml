@@ -1,0 +1,51 @@
+name: Deploy MOVIES to Cloud Run
+
+on:
+  push:
+    branches: ['production']
+
+env:
+  PROJECT_ID: ${{ vars.PROJECT_ID || 'uteq-proyectos' }}
+  REGION: ${{ vars.REGION || 'us-central1' }}
+  AR_REPO: ${{ vars.AR_REPO || 'uteq-repositorio' }}
+  SERVICE_NAME: ${{ vars.SERVICE_NAME || 'movies-service' }}
+  FRONT_ORIGIN: ${{ vars.FRONT_ORIGIN || 'https://frontend-proyect.web.app' }}
+
+jobs:
+  build_push_deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Auth to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Build image
+        run: |
+          IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO }}/${{ env.SERVICE_NAME }}:${{ github.sha }}"
+          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
+          docker build . --platform linux/amd64 -t "$IMAGE"
+
+      - name: Push image
+        run: docker push "$IMAGE"
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --image "$IMAGE" \
+            --region ${{ env.REGION }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --memory 512Mi \
+            --set-env-vars "NODE_ENV=production,MONGODB_URI=${{ secrets.MONGODB_URI }},JWT_SECRET=${{ secrets.JWT_SECRET }},CORS_ORIGIN=https://frontend-proyect.web.app,COLLECTION=movies"
